@@ -1,3 +1,17 @@
+/**
+ * This code is part of Qiskit.
+ *
+ * (C) Copyright IBM 2018, 2019.
+ *
+ * This code is licensed under the Apache License, Version 2.0. You may
+ * obtain a copy of this license in the LICENSE.txt file in the root directory
+ * of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Any modifications or derivative works of this code must retain this
+ * copyright notice, and modified files need to carry a notice indicating
+ * that they have been altered from the originals.
+ */
+
 #ifndef _aer_misc_hacks_hpp_
 #define _aer_misc_hacks_hpp_
 
@@ -48,7 +62,7 @@ auto _apple_get_loaded_openmp_library = [](const std::string& default_path) -> s
 auto _apple_maybe_load_openmp = [](const std::string& library_path) -> void {
     // dlopen() will return a handle to the library if this is already loaded
     void * handle = dlopen(_apple_get_loaded_openmp_library(library_path).c_str(), RTLD_LAZY);
-    if(handle == NULL){
+    if(handle == nullptr){
         fprintf(stderr, "WARNING: Couldn't load libomp.dylib but we needed to. Error: %s\n", dlerror());
         fprintf(stderr, "Make sure you have libomp.dylib or libiomp5.dylib accesible to the program\n");
     }

@@ -1,3 +1,17 @@
+/**
+ * This code is part of Qiskit.
+ *
+ * (C) Copyright IBM 2018, 2019.
+ *
+ * This code is licensed under the Apache License, Version 2.0. You may
+ * obtain a copy of this license in the LICENSE.txt file in the root directory
+ * of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Any modifications or derivative works of this code must retain this
+ * copyright notice, and modified files need to carry a notice indicating
+ * that they have been altered from the originals.
+ */
+
 #ifndef _aer_misc_hacks_clang_symbols_
 #define _aer_misc_hacks_clang_symbols_
 
@@ -5,6 +19,7 @@
  * This is some sort of "black magic" to solve a problem we have with OpenMP libraries on Mac.
  * The problem is actually in the library itself, but it's out of our control, so we had to
  * fix it this way.
+ * Symbol signatures are taken from: https://github.com/llvm/llvm-project/blob/master/openmp/runtime/src/kmp.h
  */
 
 #include <dlfcn.h>
@@ -158,17 +173,62 @@ extern "C" {
         return _hook__kmpc_global_thread_num(pId);
     }
 
+    using __kmpc_critical_t = void(*)(ident_t *, kmp_int32, kmp_critical_name *);
+    __kmpc_critical_t _hook__kmpc_critical;
+    void __kmpc_critical(ident_t *id, kmp_int32 global_tid, kmp_critical_name *lck){
+        return _hook__kmpc_critical(id, global_tid, lck);
+    }
+
+    using __kmpc_end_critical_t = void(*)(ident_t *, kmp_int32, kmp_critical_name *);
+    __kmpc_end_critical_t _hook__kmpc_end_critical;
+    void __kmpc_end_critical(ident_t *id, kmp_int32 global_tid, kmp_critical_name *lck){
+        return _hook__kmpc_end_critical(id, global_tid, lck);
+    }
+
+    using __kmpc_master_t = kmp_int32(*)(ident_t *, kmp_int32);
+    __kmpc_master_t _hook__kmpc_master;
+    kmp_int32 __kmpc_master(ident_t *id, kmp_int32 global_tid){
+        return _hook__kmpc_master(id, global_tid);
+    }
+
+    using __kmpc_end_master_t = void(*)(ident_t *, kmp_int32);
+    __kmpc_end_master_t _hook__kmpc_end_master;
+    void __kmpc_end_master(ident_t *id, kmp_int32 global_tid){
+        return _hook__kmpc_end_master(id, global_tid);
+    }
+
     #define __KAI_KMPC_CONVENTION
     using omp_get_max_threads_t = int(*)(void);
     omp_get_max_threads_t _hook_omp_get_max_threads;
     int __KAI_KMPC_CONVENTION omp_get_max_threads(void) {
         return _hook_omp_get_max_threads();
     }
+    using omp_get_num_threads_t = int(*)(void);
+    omp_get_num_threads_t _hook_omp_get_num_threads;
+    int __KAI_KMPC_CONVENTION omp_get_num_threads(void) {
+        return _hook_omp_get_num_threads();
+    }
+    using omp_get_thread_num_t = int(*)(void);
+    omp_get_thread_num_t _hook_omp_get_thread_num;
+    int __KAI_KMPC_CONVENTION omp_get_thread_num(void) {
+        return _hook_omp_get_thread_num();
+    }
     using omp_set_nested_t = void(*)(int);
     omp_set_nested_t _hook_omp_set_nested;
     void __KAI_KMPC_CONVENTION omp_set_nested(int foo){
         _hook_omp_set_nested(foo);
     }
+    using omp_set_max_active_levels_t = void(*)(int);
+    omp_set_max_active_levels_t _hook_omp_set_max_active_levels;
+    void __KAI_KMPC_CONVENTION omp_set_max_active_levels(int foo){
+        _hook_omp_set_max_active_levels(foo);
+    }
+    using omp_get_num_procs_t = int(*)(void);
+    omp_get_num_procs_t _hook_omp_get_num_procs;
+    int __KAI_KMPC_CONVENTION omp_get_num_procs(void) {
+        return _hook_omp_get_num_procs();
+    }
+
 
     // Symbols above this line would be needed in a future, if clang changes
     // the OpenMP implementation. So I'll keep them here just in case I need
@@ -262,8 +322,16 @@ void populate_hooks(void * handle){
     _hook__kmpc_serialized_parallel = reinterpret_cast<decltype(&__kmpc_serialized_parallel)>(dlsym(handle, "__kmpc_serialized_parallel"));
     _hook__kmpc_end_serialized_parallel = reinterpret_cast<decltype(&__kmpc_end_serialized_parallel)>(dlsym(handle, "__kmpc_end_serialized_parallel"));
     _hook__kmpc_global_thread_num = reinterpret_cast<decltype(&__kmpc_global_thread_num)>(dlsym(handle, "__kmpc_global_thread_num"));
+    _hook__kmpc_critical = reinterpret_cast<decltype(&__kmpc_critical)>(dlsym(handle, "__kmpc_critical"));
+    _hook__kmpc_end_critical = reinterpret_cast<decltype(&__kmpc_end_critical)>(dlsym(handle, "__kmpc_end_critical"));
+    _hook__kmpc_master = reinterpret_cast<decltype(&__kmpc_master)>(dlsym(handle, "__kmpc_master"));
+    _hook__kmpc_end_master = reinterpret_cast<decltype(&__kmpc_end_master)>(dlsym(handle, "__kmpc_end_master"));
     _hook_omp_get_max_threads = reinterpret_cast<decltype(&omp_get_max_threads)>(dlsym(handle, "omp_get_max_threads"));
+    _hook_omp_get_num_threads = reinterpret_cast<decltype(&omp_get_num_threads)>(dlsym(handle, "omp_get_num_threads"));
+    _hook_omp_get_thread_num = reinterpret_cast<decltype(&omp_get_thread_num)>(dlsym(handle, "omp_get_thread_num"));
     _hook_omp_set_nested = reinterpret_cast<decltype(&omp_set_nested)>(dlsym(handle, "omp_set_nested"));
+    _hook_omp_set_max_active_levels = reinterpret_cast<decltype(&omp_set_max_active_levels)>(dlsym(handle, "omp_set_max_active_levels"));
+    _hook_omp_get_num_procs = reinterpret_cast<decltype(&omp_get_num_procs)>(dlsym(handle, "omp_get_num_procs"));
 }
 
 }

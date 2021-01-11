@@ -1,8 +1,15 @@
 /**
- * Copyright 2018, IBM.
+ * This code is part of Qiskit.
  *
- * This source code is licensed under the Apache License, Version 2.0 found in
- * the LICENSE.txt file in the root directory of this source tree.
+ * (C) Copyright IBM 2018, 2019.
+ *
+ * This code is licensed under the Apache License, Version 2.0. You may
+ * obtain a copy of this license in the LICENSE.txt file in the root directory
+ * of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Any modifications or derivative works of this code must retain this
+ * copyright notice, and modified files need to carry a notice indicating
+ * that they have been altered from the originals.
  */
 
 #ifndef _aer_framework_utils_hpp_
@@ -10,6 +17,8 @@
 
 #include <algorithm>
 #include <sstream>
+#include <cmath>
+#include <limits>
 
 #include "framework/types.hpp"
 
@@ -17,81 +26,44 @@ namespace AER {
 namespace Utils {
 
 //------------------------------------------------------------------------------
-// Static Matrices
-//------------------------------------------------------------------------------
-
-class Matrix {
-public:
-  // Single-qubit gates
-  const static cmatrix_t I;     // name: "id"
-  const static cmatrix_t X;     // name: "x"
-  const static cmatrix_t Y;     // name: "y"
-  const static cmatrix_t Z;     // name: "z"
-  const static cmatrix_t H;     // name: "h"
-  const static cmatrix_t S;     // name: "s"
-  const static cmatrix_t Sdg;   // name: "sdg"
-  const static cmatrix_t T;     // name: "t"
-  const static cmatrix_t Tdg;   // name: "tdg"
-  const static cmatrix_t X90;   // name: "x90"
-
-  // Two-qubit gates
-  const static cmatrix_t CX;    // name: "cx"
-  const static cmatrix_t CZ;    // name: "cz"
-  const static cmatrix_t SWAP;  // name: "swap"
-  const static cmatrix_t CR;    // TODO
-  const static cmatrix_t CR90;  // TODO
-
-  // Identity Matrix
-  static cmatrix_t Identity(size_t dim);
-
-  // Single-qubit waltz gates
-  static cmatrix_t U1(double lam);
-  static cmatrix_t U2(double phi, double lam);
-  static cmatrix_t U3(double theta, double phi, double lam);
-
-  // Complex arguments are implemented by taking std::real
-  // of the input
-  inline static cmatrix_t U1(complex_t lam) {return U1(std::real(lam));}
-  inline static cmatrix_t U2(complex_t phi, complex_t lam) {
-    return U2(std::real(phi), std::real(lam));
-  }
-  inline static cmatrix_t U3(complex_t theta, complex_t phi, complex_t lam) {
-    return U3(std::real(theta), std::real(phi), std::real(lam));
-  };
-
-  // Return the matrix for a named matrix string
-  // Allowed names correspond to all the const static single-qubit
-  // and two-qubit gate members
-  inline static const cmatrix_t from_name(const std::string &name) {
-    return *label_map_.at(name);
-  }
-
-  // Check if the input name string is allowed
-  inline static bool allowed_name(const std::string &name) {
-    return (label_map_.find(name) != label_map_.end());
-  }
-
-
-private:
-  // Lookup table that returns a pointer to the static data member
-  const static stringmap_t<const cmatrix_t*> label_map_;
-};
-
-//------------------------------------------------------------------------------
 // Matrix Functions
 //------------------------------------------------------------------------------
 
-// Vector conversion
+// Construct a matrix from a vector of matrix-row vectors
 template<class T> matrix<T> make_matrix(const std::vector<std::vector<T>> &mat);
+
+// Reshape a length column-major vectorized matrix into a square matrix
 template<class T> matrix<T> devectorize_matrix(const std::vector<T> &vec);
+
+// Vectorize a matrix by stacking matrix columns (column-major vectorization)
 template<class T> std::vector<T> vectorize_matrix(const matrix<T> &mat);
 
-// Transformations
+// Return the transpose a matrix
 template <class T> matrix<T> transpose(const matrix<T> &A);
+
+// Return the adjoing (Hermitian-conjugate) of a matrix
 template <class T>
 matrix<std::complex<T>> dagger(const matrix<std::complex<T>> &A);
+
+// Return the complex conjugate of a matrix
 template <class T>
 matrix<std::complex<T>> conjugate(const matrix<std::complex<T>> &A);
+
+// Given a list of matrices for a multiplexer stacks and packs them 0/1/2/...
+// into a single 2^control x (2^target x 2^target) cmatrix_t) 
+// Equivalent to a 2^qubits x 2^target "flat" matrix
+template<class T>
+matrix<T> stacked_matrix(const std::vector<matrix<T>> &mmat);
+
+// Return a vector containing the diagonal of a matrix
+template<class T> std::vector<T> matrix_diagonal(const matrix<T>& mat);
+
+// Inplace transformations
+template <class T> matrix<T>& transpose_inplace(matrix<T> &A);
+template <class T>
+matrix<std::complex<T>>& dagger_inplace(matrix<std::complex<T>> &A);
+template <class T>
+matrix<std::complex<T>>& conjugate_inplace(matrix<std::complex<T>> &A);
 
 // Tracing
 template <class T> T trace(const matrix<T> &A);
@@ -100,9 +72,29 @@ template <class T> matrix<T> partial_trace_b(const matrix<T> &rho, size_t dimB);
 
 // Tensor product
 template <class T> matrix<T> tensor_product(const matrix<T> &A, const matrix<T> &B);
+template <class T> matrix<T> unitary_superop(const matrix<T> &mat);
+template <class T> matrix<T> kraus_superop(const std::vector<matrix<T>> &kmats);
+
+// concatenate
+// Returns a matrix that is the concatenation of two matrices A, B
+// The matrices must have the same dimensions
+// If axis == 0, place rows of B after rows of A (vertical extension)
+// If axis == 1, place columns of B after columns of A (horizontal extension)
+template <class T> matrix<T> concatenate (const matrix<T> &A, const matrix<T> &B, uint_t axis);
+
+// split
+// Splits A into 2 matrices B and C equal in dimensions
+// If axis == 0, split A by rows. A must have an even number of rows.
+// If axis == 1, split A by columns. A must have an even number of columns.
+template <class T> void split (const matrix<T> &A, matrix<T> &B, matrix<T> &C, uint_t axis);
+
+//Elementwise matrix multiplication
+template <class T> matrix<T> elementwise_multiplication(const matrix<T> &A, const matrix<T> &B);
+
+//Matrix sum of elements
+template <class T> T sum(const matrix<T> &A);
 
 // Matrix comparison
-
 template <class T>
 bool is_square(const matrix<T> &mat);
 
@@ -115,7 +107,10 @@ bool is_equal(const matrix<T> &mat1, const matrix<T> &mat2, double threshold);
 template <class T>
 bool is_diagonal(const matrix<T> &mat, double threshold);
 
-template <class T>
+template <class T> 
+std::pair<bool, double> is_identity_phase(const matrix<T> &mat, double threshold);
+
+template <class T> 
 bool is_identity(const matrix<T> &mat, double threshold);
 
 template <class T>
@@ -140,6 +135,10 @@ bool is_cptp_kraus(const std::vector<matrix<T>> &kraus, double threshold);
 // Return true of the vector has norm-1.
 template <typename T>
 double is_unit_vector(const std::vector<T> &vec);
+
+// Conjugate a vector
+template <typename T>
+std::vector<std::complex<T>> conjugate(const std::vector<std::complex<T>> &v);
 
 // Compute the Euclidean 2-norm of a vector
 template <typename T>
@@ -239,104 +238,6 @@ inline std::string int2hex(uint_t n) {return bin2hex(int2bin(n));}
 uint_t reg2int(const reg_t &reg, uint_t base);
 
 //==============================================================================
-// Implementations: Static Matrices
-//==============================================================================
-
-const cmatrix_t Matrix::I = make_matrix<complex_t>({{{1, 0}, {0, 0}},
-                                                    {{0, 0}, {1, 0}}});
-
-const cmatrix_t Matrix::X = make_matrix<complex_t>({{{0, 0}, {1, 0}},
-                                                    {{1, 0}, {0, 0}}});
-
-const cmatrix_t Matrix::Y = make_matrix<complex_t>({{{0, 0}, {0, -1}},
-                                                    {{0, 1}, {0, 0}}});
-
-const cmatrix_t Matrix::Z = make_matrix<complex_t>({{{1, 0}, {0, 0}},
-                                                    {{0, 0}, {-1, 0}}});
-
-const cmatrix_t Matrix::S = make_matrix<complex_t>({{{1, 0}, {0, 0}},
-                                                    {{0, 0}, {0, 1}}});
-
-const cmatrix_t Matrix::Sdg = make_matrix<complex_t>({{{1, 0}, {0, 0}},
-                                                     {{0, 0}, {0, -1}}});
-const cmatrix_t Matrix::T = make_matrix<complex_t>({{{1, 0}, {0, 0}},
-                                                    {{0, 0}, {1 / std::sqrt(2), 1 / std::sqrt(2)}}});
-
-const cmatrix_t Matrix::Tdg = make_matrix<complex_t>({{{1, 0}, {0, 0}},
-                                                      {{0, 0}, {1 / std::sqrt(2), -1 / std::sqrt(2)}}});
-
-const cmatrix_t Matrix::H = make_matrix<complex_t>({{{1 / std::sqrt(2.), 0}, {1 / std::sqrt(2.), 0}},
-                                                    {{1 / std::sqrt(2.), 0}, {-1 / std::sqrt(2.), 0}}});
-
-const cmatrix_t Matrix::X90 = make_matrix<complex_t>({{{1. / std::sqrt(2.), 0}, {0, -1. / std::sqrt(2.)}},
-                                                      {{0, -1. / std::sqrt(2.)}, {1. / std::sqrt(2.), 0}}});
-
-const cmatrix_t Matrix::CX = make_matrix<complex_t>({{{1, 0}, {0, 0}, {0, 0}, {0, 0}},
-                                                     {{0, 0}, {0, 0}, {0, 0}, {1, 0}},
-                                                     {{0, 0}, {0, 0}, {1, 0}, {0, 0}},
-                                                     {{0, 0}, {1, 0}, {0, 0}, {0, 0}}});
-
-const cmatrix_t Matrix::CZ = make_matrix<complex_t>({{{1, 0}, {0, 0}, {0, 0}, {0, 0}},
-                                                     {{0, 0}, {1, 0}, {0, 0}, {0, 0}},
-                                                     {{0, 0}, {0, 0}, {1, 0}, {0, 0}},
-                                                     {{0, 0}, {0, 0}, {0, 0}, {-1, 0}}});
-
-const cmatrix_t Matrix::SWAP = make_matrix<complex_t>({{{1, 0}, {0, 0}, {0, 0}, {0, 0}},
-                                                       {{0, 0}, {0, 0}, {1, 0}, {0, 0}},
-                                                       {{0, 0}, {1, 0}, {0, 0}, {0, 0}},
-                                                       {{0, 0}, {0, 0}, {0, 0}, {1, 0}}});
-
-// TODO const cmatrix_t Matrix::CR = ...
-// TODO const cmatrix_t Matrix::CR90 = ...
-
-// Lookup table
-const stringmap_t<const cmatrix_t*> Matrix::label_map_ = {
-  {"id", &Matrix::I}, {"x", &Matrix::X}, {"y", &Matrix::Y}, {"z", &Matrix::Z},
-  {"h", &Matrix::H}, {"s", &Matrix::S}, {"sdg", &Matrix::Sdg},
-  {"t", &Matrix::T}, {"tdg", &Matrix::Tdg}, {"x90", &Matrix::X90},
-  {"cx", &Matrix::CX}, {"cz", &Matrix::CZ}, {"swap", &Matrix::SWAP}
-};
-
-cmatrix_t Matrix::Identity(size_t dim) {
-  cmatrix_t mat(dim, dim);
-  for (size_t j=0; j<dim; j++)
-    mat(j, j) = {1.0, 0.0};
-  return mat;
-}
-
-
-cmatrix_t Matrix::U1(double lambda) {
-  cmatrix_t mat(2, 2);
-  mat(0, 0) = {1., 0.};
-  mat(1, 1) = std::exp(complex_t(0., lambda));
-  return mat;
-}
-
-
-cmatrix_t Matrix::U2(double phi, double lambda) {
-  cmatrix_t mat(2, 2);
-  const complex_t i(0., 1.);
-  const complex_t invsqrt2(1. / std::sqrt(2), 0.);
-  mat(0, 0) = invsqrt2;
-  mat(0, 1) = -std::exp(i * lambda) * invsqrt2;
-  mat(1, 0) = std::exp(i * phi) * invsqrt2;
-  mat(1, 1) = std::exp(i * (phi + lambda)) * invsqrt2;
-  return mat;
-}
-
-
-cmatrix_t Matrix::U3(double theta, double phi, double lambda) {
-  cmatrix_t mat(2, 2);
-  const complex_t i(0., 1.);
-  mat(0, 0) = std::cos(theta / 2.);
-  mat(0, 1) = -std::exp(i * lambda) * std::sin(theta / 2.);
-  mat(1, 0) = std::exp(i * phi) * std::sin(theta / 2.);
-  mat(1, 1) = std::exp(i * (phi + lambda)) * std::cos(theta / 2.);
-  return mat;
-}
-
-
-//==============================================================================
 // Implementations: Matrix functions
 //==============================================================================
 
@@ -351,7 +252,6 @@ matrix<T> devectorize_matrix(const std::vector<T>& vec) {
   return mat;
 }
 
-
 template<class T>
 std::vector<T> vectorize_matrix(const matrix<T>& mat) {
   std::vector<T> vec;
@@ -364,7 +264,6 @@ std::vector<T> vectorize_matrix(const matrix<T>& mat) {
     }
   return vec;
 }
-
 
 template <class T>
 matrix<T> make_matrix(const std::vector<std::vector<T>> & mat) {
@@ -382,7 +281,7 @@ matrix<T> make_matrix(const std::vector<std::vector<T>> & mat) {
 template <class T>
 matrix<T> transpose(const matrix<T> &A) {
   // Transposes a Matrix
-  size_t rows = A.GetRows(), cols = A.GetColumns();
+  const size_t rows = A.GetRows(), cols = A.GetColumns();
   matrix<T> temp(cols, rows);
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
@@ -396,11 +295,11 @@ matrix<T> transpose(const matrix<T> &A) {
 template <class T>
 matrix<std::complex<T>> dagger(const matrix<std::complex<T>> &A) {
   // Take the Hermitian conjugate of a complex matrix
-  size_t cols = A.GetColumns(), rows = A.GetRows();
+  const size_t cols = A.GetColumns(), rows = A.GetRows();
   matrix<std::complex<T>> temp(cols, rows);
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
-      temp(j, i) = conj(A(i, j));
+      temp(j, i) = std::conj(A(i, j));
     }
   }
   return temp;
@@ -408,16 +307,99 @@ matrix<std::complex<T>> dagger(const matrix<std::complex<T>> &A) {
 
 
 template <class T>
-matrix<std::complex<T>> conj(const matrix<std::complex<T>> &A) {
+matrix<std::complex<T>> conjugate(const matrix<std::complex<T>> &A) {
   // Take the complex conjugate of a complex matrix
-  size_t rows = A.GetRows(), cols = A.GetColumns();
+  const size_t rows = A.GetRows(), cols = A.GetColumns();
   matrix<std::complex<T>> temp(rows, cols);
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
-      temp(i, j) = conj(A(i, j));
+      temp(i, j) = std::conj(A(i, j));
     }
   }
   return temp;
+}
+
+template <class T>
+matrix<T> stacked_matrix(const std::vector<matrix<T>> &mmat){
+        size_t size_of_controls = mmat[0].GetRows(); // or GetColumns, as these matrices are (should be) square
+	size_t number_of_controls = mmat.size();
+
+	// Pack vector of matrices into single (stacked) matrix ... note: matrix dims: rows = (stacked_rows x size_of_controls) where:
+	//     stacked_rows is the number of control matrices * the size (#rows or #columns) of each control matrix
+	//     size_of_controls is the #rows (or #columns) of each control matrix
+	uint_t stacked_rows = number_of_controls*size_of_controls; // Used only for clarity in allocating the matrix
+
+	cmatrix_t stacked_matrix(stacked_rows, size_of_controls);
+	for(uint_t row = 0; row < stacked_rows; row++)
+		for(uint_t col = 0; col < size_of_controls; col++)
+			stacked_matrix(row, col) = {0.0, 0.0};
+
+	for(uint_t mmat_number = 0; mmat_number < mmat.size(); mmat_number++)
+	{
+		for(uint_t row = 0; row < size_of_controls; row++)
+		{
+			for(uint_t col = 0; col < size_of_controls; col++)
+			{
+				stacked_matrix(mmat_number * size_of_controls + row, col) = mmat[mmat_number](row, col);
+			}
+
+		}
+	}
+	return stacked_matrix;
+}
+
+template<class T>
+std::vector<T> matrix_diagonal(const matrix<T>& mat) {
+  std::vector<T> vec;
+  size_t size = std::min(mat.GetRows(), mat.GetColumns());
+  vec.resize(size, 0.);
+  for (size_t i=0; i < size; i++)
+    vec[i] = mat(i, i);
+  return vec;
+}
+
+template <class T> 
+matrix<T>& transpose_inplace(matrix<T> &A) {
+  // Transposes a Matrix
+  const size_t rows = A.GetRows(), cols = A.GetColumns();
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = i + 1; j < cols; j++) {
+      const auto tmp = A(i, j);
+      A(i, j) = A(j, i);
+      A(j, i) = tmp;
+    }
+  }
+  return A;
+}
+
+
+template <class T>
+matrix<std::complex<T>>& dagger_inplace(matrix<std::complex<T>> &A) {
+  // Take the Hermitian conjugate of a complex matrix
+  const size_t cols = A.GetColumns(), rows = A.GetRows();
+  matrix<std::complex<T>> temp(cols, rows);
+  for (size_t i = 0; i < rows; i++) {
+    A(i, i) = conj(A(i, i));
+    for (size_t j = i + 1; j < cols; j++) {
+      const auto tmp = conj(A(i, j));
+      A(i, j) = conj(A(j, i));
+      A(j, i) = tmp;
+    }
+  }
+  return A;
+}
+
+
+template <class T>
+matrix<std::complex<T>>& conj_inplace(matrix<std::complex<T>> &A) {
+  // Take the complex conjugate of a complex matrix
+  const size_t rows = A.GetRows(), cols = A.GetColumns();
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      A(i, j) = conj(A(i, j));
+    }
+  }
+  return A;
 }
 
 
@@ -521,6 +503,108 @@ matrix<T> tensor_product(const matrix<T> &A, const matrix<T> &B) {
   return temp;
 }
 
+template <class T> matrix<T> unitary_superop(const matrix<T> &mat) {
+  return tensor_product(conjugate(mat), mat);
+}
+
+template <class T> matrix<T> kraus_superop(const std::vector<matrix<T>> &kmats) {
+  if (kmats.empty())
+    return matrix<T>();
+  matrix<T> mat = unitary_superop(kmats[0]);
+  for (size_t i = 1; i < kmats.size(); ++i) {
+    mat += unitary_superop(kmats[i]);
+  }
+  return mat;
+}
+
+template <class T>
+matrix<T> concatenate (const matrix<T> &A, const matrix<T> &B, uint_t axis) {
+  if (axis != 0 && axis!= 1) {
+    throw std::invalid_argument("Utils::concatenate: axis must be 0 or 1");
+  }
+  size_t rows1 = A.GetRows(), rows2 = B.GetRows(), cols1 = A.GetColumns(), cols2 = B.GetColumns();
+  matrix<T> temp = A;
+  if(axis == 0) {
+     if(cols1 != cols2) {
+	throw std::invalid_argument("Utils::concatenate: axis must be 0 or 1");
+     }
+  temp.resize(rows1 + rows2, cols1);
+  for (size_t i = 0; i < rows2; i++)
+	for (size_t j = 0; j < cols1; j++)
+      temp(rows1 + i,j) = B(i,j);
+  }
+  else if(axis == 1) {
+    if(rows1 != rows2) {
+      throw std::invalid_argument("Utils::concatenate: the 2 matrices have a different number of rows");
+	}
+	temp.resize(rows1, cols1 + cols2);
+	for (size_t i = 0; i < rows1; i++)
+	  for (size_t j = 0; j < cols2; j++)
+		temp(i,cols1 + j) = B(i,j);
+  }
+  return temp;
+}
+
+template <class T>
+void split (const matrix<T> &A, matrix<T> &B, matrix<T> &C, uint_t axis) {
+  if (axis != 0 && axis != 1) {
+    throw std::invalid_argument("Utils::split: axis must be 0 or 1");
+  }
+  size_t rows = A.GetRows(), cols = A.GetColumns();
+  matrix<T> temp = A;
+  if(axis == 0) {
+    if (rows % 2 != 0) {
+      throw std::invalid_argument("Utils::split: can't split matrix A by rows");
+    }
+    B.resize(rows/2 , cols);
+    C.resize(rows/2 , cols);
+    for (size_t i = 0; i < rows/2; i++) {
+      for (size_t j = 0; j < cols; j++) {
+	B(i,j) = A(i,j);
+	C(i,j) = A(i+rows/2,j);
+      }
+    }
+  }
+  else if(axis == 1) {
+    if (cols % 2 != 0) {
+      throw std::invalid_argument("Utils::split: can't split matrix A by columns"); 
+    }
+    B.resize(rows, cols/2);
+    C.resize(rows, cols/2);
+    for (size_t i = 0; i < rows; i++){
+      for (size_t j = 0; j < cols/2; j++) {
+	B(i,j) = A(i,j);
+	C(i,j) = A(i,j+cols/2);
+      }
+    }
+  }
+}
+
+template <class T>
+matrix<T> elementwise_multiplication(const matrix<T> &A, const matrix<T> &B) {
+  // Works out an elementwise multiplication of two matrices A, B
+  // If A or B is empty it will return the other matrix
+  size_t rows1 = A.GetRows(), rows2 = B.GetRows(), cols1 = A.GetColumns(),
+         cols2 = B.GetColumns();
+  if(rows1 != rows2 || cols1 != cols2) {
+    throw std::invalid_argument("Utils::elementwise_multiplication: matrices have different sizes");
+  }
+  matrix<T> temp(rows1, cols1);
+  for (size_t i = 0; i < rows1; i++)
+    for (size_t j = 0; j < cols1; j++)
+      temp(i, j) = A(i, j) * B(i, j);
+  return temp;
+}
+
+template <class T>
+T sum(const matrix<T> &A){
+  T temp = 0;
+  for(uint_t i = 0; i < A.size(); i++)
+    temp += A[i];
+  return temp;
+}
+
+
 template <class T>
 bool is_square(const matrix<T> &mat) {
   if (mat.GetRows() != mat.GetColumns())
@@ -542,7 +626,7 @@ bool is_equal(const matrix<T> &mat1, const matrix<T> &mat2, double threshold) {
   // Check matrices are same shape
   const auto nrows = mat1.GetRows();
   const auto ncols = mat1.GetColumns();
-  if (nrows != mat2.GetRows() || ncols != mat2.GetColumns)
+  if (nrows != mat2.GetRows() || ncols != mat2.GetColumns())
     return false;
 
   // Check matrices are equal on an entry by entry basis
@@ -570,21 +654,56 @@ bool is_diagonal(const matrix<T> &mat, double threshold) {
 }
 
 
-template <class T>
-bool is_identity(const matrix<T> &mat, double threshold) {
-  // Check U matrix is identity
+template <class T> 
+std::pair<bool, double> is_identity_phase(const matrix<T> &mat, double threshold) {
+  
+  // To check if identity we first check we check that:
+  // 1. U(0,0) = exp(i * theta)
+  // 2. U(i, i) = U(0, 0)
+  // 3. U(i, j) = 0 for j != i 
+  auto failed = std::make_pair(false, 0.0);
+
+  // Check condition 1.
+  const auto u00 = mat(0, 0);
+  //if (std::norm(std::abs(u00) - 1.0) > threshold)
+  //  return failed;
+  if (std::norm(std::abs(u00) - 1.0) > threshold) {
+    return failed;
+  }
+  const auto theta = std::arg(u00);
+
+  // Check conditions 2 and 3
   double delta = 0.;
   const auto nrows = mat.GetRows();
   const auto ncols = mat.GetColumns();
   if (nrows != ncols)
-    return false;
+    return failed;
   for (size_t i=0; i < nrows; i++) {
     for (size_t j=0; j < ncols; j++) {
-      T val = (i==j) ? 1 : 0;
-      delta += std::real(std::abs(mat(i, j) - val));
+      auto val = (i==j) ? std::norm(mat(i, j) - u00)
+                        : std::norm(mat(i, j));
+      if (val > threshold) {
+        return failed; // fail fast if single entry differs
+      } else
+        delta += val; // accumulate difference
     }
   }
-  return (delta < threshold);
+  // Check small errors didn't accumulate
+  if (delta > threshold) {
+    return failed;
+  }
+  // Otherwise we pass
+  return std::make_pair(true, theta);
+}
+
+template <class T> 
+bool is_identity(const matrix<T> &mat, double threshold) {
+  // Check mat(0, 0) == 1
+  if (std::norm(mat(0, 0) - T(1)) > threshold)
+    return false;
+  // If this passes now use is_identity_phase (and we know
+  // phase will be zero).
+  return is_identity_phase(mat, threshold).first;
 }
 
 template <class T>
@@ -600,7 +719,7 @@ bool is_diagonal_identity(const matrix<T> &mat, double threshold) {
   return (delta < threshold);
 }
 
-template <class T>
+template <class T> 
 bool is_unitary(const matrix<T> &mat, double threshold) {
   size_t nrows = mat.GetRows();
   size_t ncols = mat.GetColumns();
@@ -634,9 +753,10 @@ bool is_symmetrix(const matrix<T> &mat, double threshold) {
 
 template <class T>
 bool is_cptp_kraus(const std::vector<matrix<T>> &mats, double threshold) {
-  matrix<T> cptp(mats[0].size());
+  const auto dim = mats[0].GetRows();
+  matrix<T> cptp(dim, dim);
   for (const auto &mat : mats) {
-    cptp = cptp + dagger(mat) * mat;
+    cptp += dagger(mat) * mat;
   }
   return is_identity(cptp, threshold);
 }
@@ -651,9 +771,17 @@ bool is_unit_vector(const std::vector<T> &vec, double threshold) {
 }
 
 template <typename T>
+std::vector<std::complex<T>> conjugate(const std::vector<std::complex<T>> &v) {
+  std::vector<std::complex<T>> ret;
+  std::transform(v.cbegin(), v.cend(), std::back_inserter(ret),
+                [] (const std::complex<T> &c) -> std::complex<T> { return std::conj(c); });
+  return ret;
+}
+
+template <typename T>
 double norm(const std::vector<T> &vec) {
   double val = 0.0;
-  for (const auto v : vec) {
+  for (const auto &v : vec) {
     val += std::real(v * std::conj(v));
   }
   return std::sqrt(val);
@@ -674,7 +802,7 @@ matrix<T> outer_product(const std::vector<T> &ket, const std::vector<T> &bra) {
 template <typename T>
 std::vector<T> tensor_product(const std::vector<T> &vec1,
                               const std::vector<T> &vec2) {
-  std::vector<double> ret;
+  std::vector<T> ret;
   ret.reserve(vec1.size() * vec2.size());
   for (const auto &a : vec1)
     for (const auto &b : vec2) {
@@ -859,13 +987,13 @@ reg_t hex2reg(std::string str) {
     size_t length = (str.size() % 8) + 32 * (str.size() / 8);
     reg.reserve(length);
     while (str.size() > 8) {
-      unsigned long hex = stoull(str.substr(str.size() - 8), 0, 16);
+      unsigned long hex = stoull(str.substr(str.size() - 8), nullptr, 16);
       reg_t tmp = int2reg(hex, 2, 32);
       std::move(tmp.begin(), tmp.end(), back_inserter(reg));
       str.erase(str.size() - 8);
     }
     if (str.size() > 0) {
-      reg_t tmp = int2reg(stoul(str, 0, 16), 2, 0);
+      reg_t tmp = int2reg(stoul(str, nullptr, 16), 2, 0);
       std::move(tmp.begin(), tmp.end(), back_inserter(reg));
     }
     return reg;
@@ -936,17 +1064,20 @@ std::string bin2hex(std::string str, bool prefix) {
 
   // Add > 64 bit chunks
   if (chunks > 0) {
+    std::string part;
     // Add last 64-bit chunk
-    std::stringstream ss;
-    ss << std::hex << std::stoull(str.substr(remain, bin_block), nullptr, 2);
-    std::string part = ss.str();
-    if (remain > 0) {
-      part.insert(0, hex_block - part.size(), '0'); // pad out zeros
+    {
+      std::stringstream ss;
+      ss << std::hex << std::stoull(str.substr(remain, bin_block), nullptr, 2);
+      part = ss.str();
+      if (remain > 0) {
+        part.insert(0, hex_block - part.size(), '0'); // pad out zeros
+      }
+      hex += part;
     }
-    hex += part;
     // Add any additional chunks
     for (size_t j=1; j < chunks; ++j) {
-      ss = std::stringstream(); // clear string stream
+      std::stringstream ss; // clear string stream
       ss << std::hex << std::stoull(str.substr(remain + j * bin_block, bin_block), nullptr, 2);
       part = ss.str();
       part.insert(0, hex_block - part.size(), '0');
@@ -988,6 +1119,17 @@ std::string int2string(uint_t n, uint_t base) {
 std::string int2string(uint_t n, uint_t base, uint_t minlen) {
   std::string tmp = int2string(n, base);
   return padleft_inplace(tmp, '0', minlen);
+}
+
+uint_t popcount(const uint_t count_) {
+  auto count = count_;
+  count = (count & 0x5555555555555555) + ((count >> 1) & 0x5555555555555555);
+  count = (count & 0x3333333333333333) + ((count >> 2) & 0x3333333333333333);
+  count = (count & 0x0f0f0f0f0f0f0f0f) + ((count >> 4) & 0x0f0f0f0f0f0f0f0f);
+  count = (count & 0x00ff00ff00ff00ff) + ((count >> 8) & 0x00ff00ff00ff00ff);
+  count = (count & 0x0000ffff0000ffff) + ((count >> 16) & 0x0000ffff0000ffff);
+  count = (count & 0x00000000ffffffff) + ((count >> 32) & 0x00000000ffffffff);
+  return count;
 }
 
 

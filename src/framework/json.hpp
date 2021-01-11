@@ -1,8 +1,15 @@
 /**
- * Copyright 2018, IBM.
+ * This code is part of Qiskit.
  *
- * This source code is licensed under the Apache License, Version 2.0 found in
- * the LICENSE.txt file in the root directory of this source tree.
+ * (C) Copyright IBM 2018, 2019.
+ *
+ * This code is licensed under the Apache License, Version 2.0. You may
+ * obtain a copy of this license in the LICENSE.txt file in the root directory
+ * of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Any modifications or derivative works of this code must retain this
+ * copyright notice, and modified files need to carry a notice indicating
+ * that they have been altered from the originals.
  */
 
 #ifndef _aer_framework_json_hpp_
@@ -15,9 +22,16 @@
 #include <map>
 #include <vector>
 
-#include <nlohmann_json.hpp>
+#include <iostream>
+#include <type_traits>
+
+#include "misc/warnings.hpp"
+DISABLE_WARNING_PUSH
+#include <nlohmann/json.hpp>
+DISABLE_WARNING_POP
 #include "framework/matrix.hpp"
 
+namespace nl = nlohmann;
 using json_t = nlohmann::json;
 
 //============================================================================
@@ -33,7 +47,7 @@ namespace JSON {
  * @param name: file name to load.
  * @returns: the loaded json.
  */
-json_t load(std::string name);
+inline json_t load(std::string name);
 
 /**
  * Check if a key exists in a json_t object.
@@ -41,7 +55,7 @@ json_t load(std::string name);
  * @param js: the json_t to search for key.
  * @returns: true if the key exists, false otherwise.
  */
-bool check_key(std::string key, const json_t &js);
+inline bool check_key(std::string key, const json_t &js);
 
 /**
  * Check if all keys exists in a json_t object.
@@ -49,7 +63,7 @@ bool check_key(std::string key, const json_t &js);
  * @param js: the json_t to search for keys.
  * @returns: true if all keys exists, false otherwise.
  */
-bool check_keys(std::vector<std::string> keys, const json_t &js);
+inline bool check_keys(std::vector<std::string> keys, const json_t &js);
 
 /**
  * Load a json_t object value into a variable if the key name exists.

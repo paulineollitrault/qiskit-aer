@@ -1,8 +1,15 @@
 /**
- * Copyright 2018, IBM.
+ * This code is part of Qiskit.
  *
- * This source code is licensed under the Apache License, Version 2.0 found in
- * the LICENSE.txt file in the root directory of this source tree.
+ * (C) Copyright IBM 2018, 2019.
+ *
+ * This code is licensed under the Apache License, Version 2.0. You may
+ * obtain a copy of this license in the LICENSE.txt file in the root directory
+ * of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Any modifications or derivative works of this code must retain this
+ * copyright notice, and modified files need to carry a notice indicating
+ * that they have been altered from the originals.
  */
 
 #ifndef _aer_framework_creg_hpp_
@@ -132,7 +139,7 @@ bool ClassicalRegister::check_conditional(const Operations::Op &op) const {
   if (op.conditional)
     return (creg_register_[creg_register_.size() - op.conditional_reg - 1] == '1');
   
-  // DEPRECIATED: old style conditional
+  // DEPRECATED: old style conditional
   if (op.old_conditional) {
     std::string current;
     auto mask = Utils::padleft(Utils::hex2bin(op.old_conditional_mask, false),
