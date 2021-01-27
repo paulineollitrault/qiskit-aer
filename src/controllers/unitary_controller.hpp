@@ -293,13 +293,14 @@ void UnitaryController::run_circuit_helper(
 
   // Output data container
   result.set_config(config);
-  result.add_metadata("method", state.name());
+  result.metadata.add(state.name(), "method");
 
   // Optimize circuit
   const std::vector<Operations::Op>* op_ptr = &circ.ops;
   Transpile::Fusion fusion_pass;
   fusion_pass.threshold /= 2;  // Halve default threshold for unitary simulator
   fusion_pass.set_config(config);
+  fusion_pass.set_parallelization(parallel_state_update_);
   Circuit opt_circ;
   if (fusion_pass.active && circ.num_qubits >= fusion_pass.threshold) {
     opt_circ = circ; // copy circuit
@@ -316,10 +317,10 @@ void UnitaryController::run_circuit_helper(
   }
   state.initialize_creg(circ.num_memory, circ.num_registers);
   state.apply_ops(*op_ptr, result, rng);
-  state.add_creg_to_data(result);
+  Base::Controller::save_count_data(result, state.creg());
 
   // Add final state unitary to the data
-  result.data.add_additional_data("unitary", state.qreg().move_to_matrix());
+  state.save_data_single(result, "unitary", state.move_to_matrix());
 }
 
 //-------------------------------------------------------------------------

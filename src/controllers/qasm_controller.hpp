@@ -775,6 +775,8 @@ Transpile::Fusion QasmController::transpile_fusion(Method method,
                                                    const Operations::OpSet &opset,
                                                    const json_t& config) const {
   Transpile::Fusion fusion_pass;
+  fusion_pass.set_parallelization(parallel_state_update_);
+
   if (opset.contains(Operations::OpType::superop)) {
     fusion_pass.allow_superop = true;
   }
@@ -883,13 +885,12 @@ void QasmController::run_circuit_helper(const Circuit& circ,
 
   // Output data container
   result.set_config(config);
-  result.add_metadata("method", state.name());
+  result.metadata.add(state.name(), "method");
   state.add_metadata(result);
 
   // Add measure sampling to metadata
   // Note: this will set to `true` if sampling is enabled for the circuit
-  result.add_metadata("measure_sampling", false);
-
+  result.metadata.add(false, "measure_sampling");
   // Choose execution method based on noise and method
   Circuit opt_circ;
 
@@ -944,7 +945,7 @@ void QasmController::run_single_shot(const Circuit& circ,
                                      RngEngine& rng) const {
   initialize_state(circ, state, initial_state);
   state.apply_ops(circ.ops, result, rng, true);
-  state.add_creg_to_data(result);
+  Base::Controller::save_count_data(result, state.creg());
 }
 
 template <class State_t, class Initstate_t>
@@ -973,7 +974,7 @@ void QasmController::run_multi_shot(const Circuit& circ,
     measure_sampler(ops, shots, state, result, rng);
 
     // Add measure sampling metadata
-    result.add_metadata("measure_sampling", true);
+    result.metadata.add(true, "measure_sampling");
   } else {
     // Perform standard execution if we cannot apply the
     // measurement sampling optimization
@@ -1052,7 +1053,7 @@ void QasmController::measure_sampler(
   // Check if meas_circ is empty, and if so return initial creg
   if (meas_roerror_ops.empty()) {
     while (shots-- > 0) {
-      state.add_creg_to_data(result);
+      Base::Controller::save_count_data(result, state.creg());
     }
     return;
   }
@@ -1121,11 +1122,8 @@ void QasmController::measure_sampler(
       creg.apply_roerror(roerror, rng);
     }
 
-    auto memory = creg.memory_hex();
-    result.data.add_memory_count(memory);
-    result.data.add_pershot_memory(memory);
-
-    result.data.add_pershot_register(creg.register_hex());
+    // Save count data
+    Base::Controller::save_count_data(result, creg);
 
     // pop off processed sample
     all_samples.pop_back();

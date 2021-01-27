@@ -114,9 +114,9 @@ public:
   virtual void initialize_qreg(uint_t num_qubits) override;
 
   // Initializes to a specific n-qubit state given as a complex std::vector
-  virtual void initialize_qreg(uint_t num_qubits, const matrixproductstate_t &state) override;
-
   void initialize_qreg(uint_t num_qubits, const cvector_t &statevector);
+
+  virtual void initialize_qreg(uint_t num_qubits, const matrixproductstate_t &state);
 
   // Returns the required memory for storing an n-qubit state in megabytes.
   // For this state the memory is indepdentent of the number of ops
@@ -179,7 +179,7 @@ protected:
 
   // Measure qubits and return a list of outcomes [q0, q1, ...]
   // If a state subclass supports this function, then "measure"
-  // should be contained in the set defineed by 'allowed_ops'
+  // should be contained in the set defined by 'allowed_ops'
   virtual void apply_measure(const reg_t &qubits,
                              const reg_t &cmemory,
                              const reg_t &cregister,
@@ -225,11 +225,6 @@ protected:
   // 3 -> |q1 = 1, q0 = 1> state
   std::pair<uint_t, double>
   sample_measure_with_prob(const reg_t &qubits, RngEngine &rng);
-
-
-  void measure_reset_update(const reg_t &qubits,
-                            const uint_t final_state,
-                            const reg_t &meas_state);
 
   //-----------------------------------------------------------------------
   // Special snapshot types
@@ -359,37 +354,33 @@ const stringmap_t<Snapshots> State::snapshotset_({
 // Initialization
 //-------------------------------------------------------------------------
 
-void State::initialize_qreg(uint_t num_qubits) {
-  qreg_.initialize((uint_t)num_qubits);
+void State::initialize_qreg(uint_t num_qubits=0) {
+  qreg_.initialize(num_qubits);
+}
+
+void State::initialize_qreg(uint_t num_qubits, const cvector_t &statevector) {
+  if (qreg_.num_qubits() != num_qubits)
+    throw std::invalid_argument("MatrixProductState::State::initialize_qreg: initial state does not match qubit number");
+  reg_t qubits(num_qubits);
+  std::iota(qubits.begin(), qubits.end(), 0);
+  qreg_.initialize_from_statevector_internal(qubits, statevector);
 }
 
 void State::initialize_qreg(uint_t num_qubits, const matrixproductstate_t &state) {
   // Check dimension of state
   if (qreg_.num_qubits() != num_qubits) {
-    throw std::invalid_argument("MatrixProductState::State::initialize: initial state does not match qubit number");
+    throw std::invalid_argument("MatrixProductState::State::initialize_qreg: initial state does not match qubit number");
   }
 #ifdef DEBUG
   std::cout << "initialize with state not supported yet";
 #endif
 }
 
-void State::initialize_qreg(uint_t num_qubits, const cvector_t &statevector) {
-  // Check dimension of state
-  if (qreg_.num_qubits() != num_qubits) {
-    throw std::invalid_argument("MatrixProductState::State::initialize: initial state does not match qubit number");
-  }
-
-  // internal bit ordering is the opposite of ordering in Qasm, so must
-  // reverse order before starting
-  cvector_t mps_format_state_vector = reverse_all_bits(statevector, num_qubits);
-
-  qreg_.initialize_from_statevector(num_qubits, mps_format_state_vector);
-}
-
 void State::initialize_omp() {
   if (BaseState::threads_ > 0)
     qreg_.set_omp_threads(BaseState::threads_); // set allowed OMP threads in MPS
 }
+
 
 size_t State::required_memory_mb(uint_t num_qubits,
 			      const std::vector<Operations::Op> &ops) const {
@@ -452,14 +443,15 @@ void State::set_config(const json_t &config) {
 }
 
 void State::add_metadata(ExperimentResult &result) const {
-  result.add_metadata("matrix_product_state_truncation_threshold", 
-		    MPS_Tensor::get_truncation_threshold());
-
-  result.add_metadata("matrix_product_state_max_bond_dimension", 
-		    MPS_Tensor::get_max_bond_dimension());
-
-  result.add_metadata("matrix_product_state_sample_measure_algorithm", 
-         	    MPS::get_sample_measure_alg());
+  result.metadata.add(
+    MPS_Tensor::get_truncation_threshold(),
+    "matrix_product_state_truncation_threshold");
+  result.metadata.add(
+    MPS_Tensor::get_max_bond_dimension(),
+    "matrix_product_state_max_bond_dimension");
+  result.metadata.add(
+    MPS::get_sample_measure_alg(),
+    "matrix_product_state_sample_measure_algorithm");
 } 
 
 //=========================================================================
@@ -539,15 +531,15 @@ void State::snapshot_pauli_expval(const Operations::Op &op,
   Utils::chop_inplace(expval, MPS::get_json_chop_threshold());
   switch (type) {
     case SnapshotDataType::average:
-      result.data.add_average_snapshot("expectation_value", op.string_params[0],
+      result.legacy_data.add_average_snapshot("expectation_value", op.string_params[0],
                             BaseState::creg_.memory_hex(), expval, false);
       break;
     case SnapshotDataType::average_var:
-      result.data.add_average_snapshot("expectation_value", op.string_params[0],
+      result.legacy_data.add_average_snapshot("expectation_value", op.string_params[0],
                             BaseState::creg_.memory_hex(), expval, true);
       break;
     case SnapshotDataType::pershot:
-      result.data.add_pershot_snapshot("expectation_values", op.string_params[0], expval);
+      result.legacy_data.add_pershot_snapshot("expectation_values", op.string_params[0], expval);
       break;
   }
 }
@@ -577,15 +569,15 @@ void State::snapshot_matrix_expval(const Operations::Op &op,
   Utils::chop_inplace(expval, MPS::get_json_chop_threshold());
   switch (type) {
     case SnapshotDataType::average:
-      result.data.add_average_snapshot("expectation_value", op.string_params[0],
+      result.legacy_data.add_average_snapshot("expectation_value", op.string_params[0],
                             BaseState::creg_.memory_hex(), expval, false);
       break;
     case SnapshotDataType::average_var:
-      result.data.add_average_snapshot("expectation_value", op.string_params[0],
+      result.legacy_data.add_average_snapshot("expectation_value", op.string_params[0],
                             BaseState::creg_.memory_hex(), expval, true);
       break;
     case SnapshotDataType::pershot:
-      result.data.add_pershot_snapshot("expectation_values", op.string_params[0], expval);
+      result.legacy_data.add_pershot_snapshot("expectation_values", op.string_params[0], expval);
       break;
   }
 }
@@ -595,7 +587,7 @@ void State::snapshot_state(const Operations::Op &op,
 			   std::string name) {
   cvector_t statevector;
   qreg_.full_state_vector(statevector);
-  result.data.add_pershot_snapshot("statevector", op.string_params[0], statevector);
+  result.legacy_data.add_pershot_snapshot("statevector", op.string_params[0], statevector);
 }
 
 void State::snapshot_amplitudes(const Operations::Op &op,
@@ -609,7 +601,7 @@ void State::snapshot_amplitudes(const Operations::Op &op,
     base_values.push_back(param);
   }
   auto amplitude_vector = qreg_.get_amplitude_vector(base_values);
-  result.data.add_pershot_snapshot("amplitudes", op.string_params[0], amplitude_vector);
+  result.legacy_data.add_pershot_snapshot("amplitudes", op.string_params[0], amplitude_vector);
 }
 
 void State::snapshot_probabilities(const Operations::Op &op,
@@ -620,7 +612,7 @@ void State::snapshot_probabilities(const Operations::Op &op,
   auto probs = Utils::vec2ket(prob_vector, MPS::get_json_chop_threshold(), 16);
 
   bool variance = type == SnapshotDataType::average_var;
-  result.data.add_average_snapshot("probabilities", op.string_params[0], 
+  result.legacy_data.add_average_snapshot("probabilities", op.string_params[0], 
   			    BaseState::creg_.memory_hex(), probs, variance);
 
 }
@@ -639,15 +631,15 @@ void State::snapshot_density_matrix(const Operations::Op &op,
   // Add density matrix to result data
   switch (type) {
     case SnapshotDataType::average:
-      result.data.add_average_snapshot("density_matrix", op.string_params[0],
+      result.legacy_data.add_average_snapshot("density_matrix", op.string_params[0],
                             BaseState::creg_.memory_hex(), std::move(reduced_state), false);
       break;
     case SnapshotDataType::average_var:
-      result.data.add_average_snapshot("density_matrix", op.string_params[0],
+      result.legacy_data.add_average_snapshot("density_matrix", op.string_params[0],
                             BaseState::creg_.memory_hex(), std::move(reduced_state), true);
       break;
     case SnapshotDataType::pershot:
-      result.data.add_pershot_snapshot("density_matrix", op.string_params[0], std::move(reduced_state));
+      result.legacy_data.add_pershot_snapshot("density_matrix", op.string_params[0], std::move(reduced_state));
       break;
   }
 }
@@ -789,18 +781,7 @@ void State::apply_kraus(const reg_t &qubits,
 void State::apply_initialize(const reg_t &qubits,
 			     const cvector_t &params,
 			     RngEngine &rng) {
-   if (qubits.size() == BaseState::qreg_.num_qubits()) {
-     // If qubits is all ordered qubits in the statevector
-     // we can just initialize the whole state directly
-     auto sorted_qubits = qubits;
-     std::sort(sorted_qubits.begin(), sorted_qubits.end());
-     if (qubits == sorted_qubits) {
-       initialize_qreg(qubits.size(), params);
-       return;
-     }
-   }
-    // partial initialization not supported yet
-   throw std::invalid_argument("MPS_State: Partial initialization not supported yet.");
+  qreg_.apply_initialize(qubits, params, rng);
 }
 
 void State::apply_measure(const reg_t &qubits,
@@ -974,20 +955,7 @@ void State::apply_snapshot(const Operations::Op &op, ExperimentResult &result) {
 
 void State::apply_reset(const reg_t &qubits,
                         RngEngine &rng) {
-  // Simulate unobserved measurement
-  reg_t outcome = qreg_.apply_measure(qubits, rng);
-  // Apply update to reset state
-  measure_reset_update(qubits, 0, outcome);
-}
-
-void State::measure_reset_update(const reg_t &qubits,
-				 const uint_t final_state,
-				 const reg_t &meas_state) {
-  for (uint_t i=0; i<qubits.size(); i++) {
-    if(meas_state[i] != final_state) {
-      qreg_.apply_x(qubits[i]);
-    }
-  }
+  qreg_.reset(qubits, rng);
 }
 
 std::pair<uint_t, double>
