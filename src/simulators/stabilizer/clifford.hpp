@@ -16,7 +16,7 @@
 #define _clifford_hpp_
 
 #include "pauli.hpp"
-
+#include "../../framework/json_parser.hpp"
 
 namespace Clifford {
 
@@ -391,14 +391,14 @@ json_t Clifford::json() const {
   json_t stab;
   for (size_t i = 0; i < num_qubits_; i++) {
     // Destabilizer
-    std::string label = (phases_[i] == 0) ? "" : "-";
+    std::string label = (phases_[i] == 0) ? "+" : "-";
     label += table_[i].str();
-    js["destabilizers"].push_back(label);
+    js["destabilizer"].push_back(label);
 
     // Stabilizer
-    label = (phases_[num_qubits_ + i] == 0) ? "" : "-";
+    label = (phases_[num_qubits_ + i] == 0) ? "+" : "-";
     label += table_[num_qubits_ + i].str();
-    js["stabilizers"].push_back(label);
+    js["stabilizer"].push_back(label);
   }
   return js;
 }
@@ -407,13 +407,16 @@ inline void to_json(json_t &js, const Clifford &clif) {
   js = clif.json();
 }
 
-inline void from_json(const json_t &js, Clifford &clif) {
-  bool has_keys = JSON::check_keys({"stabilizers", "destabilizers"}, js);
+template <typename inputdata_t>
+void build_from(const inputdata_t& input, Clifford& clif){
+  bool has_keys = AER::Parser<inputdata_t>::check_keys({"stabilizer", "destabilizer"}, input);
   if (!has_keys)
     throw std::invalid_argument("Invalid Clifford JSON.");
 
-  const std::vector<std::string> stab = js["stabilizers"];
-  const std::vector<std::string> destab = js["destabilizers"];
+  std::vector<std::string> stab, destab;
+  AER::Parser<inputdata_t>::get_value(stab, "stabilizer", input);
+  AER::Parser<inputdata_t>::get_value(destab, "destabilizer", input);
+
   const auto nq = stab.size();
   if (nq != destab.size()) {
     throw std::invalid_argument("Invalid Clifford JSON: stabilizer and destabilizer lengths do not match.");
@@ -463,6 +466,9 @@ inline void from_json(const json_t &js, Clifford &clif) {
   }
 }
 
+inline void from_json(const json_t &js, Clifford &clif) {
+    build_from(js, clif);
+}
 
 //------------------------------------------------------------------------------
 } // end namespace Clifford

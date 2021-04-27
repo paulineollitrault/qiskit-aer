@@ -16,6 +16,7 @@ QasmSimulator Integration Tests
 
 import unittest
 from test.terra import common
+from qiskit.providers.aer import QasmSimulator
 
 # Basic circuit instruction tests
 from test.terra.backends.qasm_simulator.qasm_reset import QasmResetTests
@@ -27,6 +28,7 @@ from test.terra.backends.qasm_simulator.qasm_initialize import QasmInitializeTes
 from test.terra.backends.qasm_simulator.qasm_multiplexer import QasmMultiplexerTests
 from test.terra.backends.qasm_simulator.qasm_standard_gates import QasmStandardGateStatevectorTests
 from test.terra.backends.qasm_simulator.qasm_standard_gates import QasmStandardGateDensityMatrixTests
+from test.terra.backends.qasm_simulator.qasm_delay_gate import QasmDelayGateTests
 # Conditional instruction tests
 from test.terra.backends.qasm_simulator.qasm_conditional import QasmConditionalGateTests
 from test.terra.backends.qasm_simulator.qasm_conditional import QasmConditionalUnitaryTests
@@ -40,6 +42,9 @@ from test.terra.backends.qasm_simulator.qasm_noise import QasmReadoutNoiseTests
 from test.terra.backends.qasm_simulator.qasm_noise import QasmPauliNoiseTests
 from test.terra.backends.qasm_simulator.qasm_noise import QasmResetNoiseTests
 from test.terra.backends.qasm_simulator.qasm_noise import QasmKrausNoiseTests
+# Save data tests
+from test.terra.backends.qasm_simulator.qasm_save import QasmSaveDataTests
+from test.terra.backends.qasm_simulator.qasm_set_state import QasmSetStateTests
 # Snapshot tests
 from test.terra.backends.qasm_simulator.qasm_snapshot import QasmSnapshotStatevectorTests
 from test.terra.backends.qasm_simulator.qasm_snapshot import QasmSnapshotDensityMatrixTests
@@ -81,8 +86,11 @@ class TestQasmSimulator(common.QiskitAerTestCase,
                         QasmResetNoiseTests,
                         QasmKrausNoiseTests,
                         QasmBasicsTests,
+                        QasmSaveDataTests,
+                        QasmSetStateTests,
                         QasmStandardGateStatevectorTests,
                         QasmStandardGateDensityMatrixTests,
+                        QasmDelayGateTests,
                         QasmSnapshotStatevectorTests,
                         QasmSnapshotDensityMatrixTests,
                         QasmSnapshotProbabilitiesTests,
@@ -95,8 +103,10 @@ class TestQasmSimulator(common.QiskitAerTestCase,
 
     BACKEND_OPTS = {
         "seed_simulator": 2113,
+        "method": "automatic",
         "max_parallel_threads": 1
     }
+    SIMULATOR = QasmSimulator(**BACKEND_OPTS)
 
 
 if __name__ == '__main__':

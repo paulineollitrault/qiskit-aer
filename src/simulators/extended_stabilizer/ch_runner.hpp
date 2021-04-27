@@ -97,7 +97,7 @@ public:
   //This will be either the |0>^n state, or a stabilizer state
   //produced by applying the first m Clifford gates of the
   //circuit. 
-  void initialize_decomposition(uint_t n_states);
+  void initialize_decomposition(uint_t n_states, double delta);
   //Check if the coefficient omega is 0
   bool check_eps(uint_t rank);
 
@@ -142,7 +142,7 @@ public:
   std::vector<uint_t> stabilizer_sampler(uint_t n_shots, AER::RngEngine &rng);
   //Utilities for the state-vector snapshot.
   complex_t amplitude(uint_t x_measure);
-  void state_vector(std::vector<complex_t> &svector, uint_t default_samples, uint_t repetitions, AER::RngEngine &rng);
+  AER::Vector<complex_t> statevector();
 
 };
 
@@ -166,7 +166,7 @@ void Runner::initialize(uint_t num_qubits)
   coefficients_.push_back(complex_t(1.,0.));
 }
 
-void Runner::initialize_decomposition(uint_t n_states)
+void Runner::initialize_decomposition(uint_t n_states, double delta)
 {
   num_states_ = n_states;
   states_.reserve(num_states_);
@@ -177,6 +177,7 @@ void Runner::initialize_decomposition(uint_t n_states)
                              std::string("being properly cleared since the last ") +
                              std::string("experiment."));
   }
+  coefficients_[0] = complex_t(1./ delta,0.);
   chstabilizer_t base_sate(states_[0]);
   complex_t coeff(coefficients_[0]);
   for(uint_t i=1; i<num_states_; i++)
@@ -473,7 +474,6 @@ double Runner::norm_estimation(uint_t n_samples, uint_t repetitions, AER::RngEng
         }
       }
     } // end omp parallel
-    // return ParallelNormEstimate(states_, coefficients_, adiag_1, adiag_2, a, num_threads_);
     double xi = ParallelNormEstimate(states_, coefficients_, adiag_1, adiag_2, a, num_threads_);
     xi_samples[m] = xi;
   }
@@ -719,29 +719,25 @@ complex_t Runner::amplitude(uint_t x_measure)
   return {real_part, imag_part};
 }
 
-void Runner::state_vector(std::vector<complex_t> &svector, uint_t default_samples, uint_t repetitions, AER::RngEngine &rng)
+AER::Vector<complex_t> Runner::statevector()
 {
   uint_t ceil = 1ULL << n_qubits_;
-  uint_t n_samples = std::llrint(0.5 * std::pow(n_qubits_, 2));
-  if (n_samples < default_samples)
-  {
-    n_samples = default_samples;
-  }
-  if (!svector.empty())
-  {
-    svector.clear();
-  }
-  svector.reserve(ceil);
-  // double norm = 1;
-  double norm = 1;
-  if(num_states_ > 1)
-  {
-    norm = norm_estimation(n_samples, repetitions, rng);
-  }
+  AER::Vector<complex_t> svector(ceil, false);
+
+  double norm_squared = 0;
+
   for(uint_t i=0; i<ceil; i++)
   {
-    svector.push_back(amplitude(i)/std::sqrt(norm));
+    svector[i] = amplitude(i);
+    norm_squared += svector[i].real()*svector[i].real() + svector[i].imag()*svector[i].imag();
   }
+  double norm = std::sqrt(norm_squared);
+  for(uint_t i=0; i<ceil; i++)
+  {
+    svector[i] /= norm;
+  }
+  
+  return svector;
 }
 
 //=========================================================================

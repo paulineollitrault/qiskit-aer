@@ -27,8 +27,8 @@ namespace MatrixProductState {
 // Allowed gates enum class
 enum Gates {
   id, h, x, y, z, s, sdg, sx, t, tdg, u1, u2, u3, r, rx, ry, rz, // single qubit
-  cx, cz, cu1, swap, su4, rxx, ryy, rzz, rzx, // two qubit
-  mcx // three qubit
+  cx, cy, cz, cu1, swap, su4, rxx, ryy, rzz, rzx, csx, // two qubit
+  ccx, cswap // three qubit
 };
 
   //enum class Direction {RIGHT, LEFT};
@@ -69,6 +69,7 @@ public:
 
   void apply_initialize(const reg_t &qubits, const cvector_t &statevector, 
 			RngEngine &rng);
+  void initialize_from_mps(const mps_container_t &mps);
 
   //----------------------------------------------------------------
   // Function name: num_qubits
@@ -115,20 +116,24 @@ public:
   void apply_sdg(uint_t index){ get_qubit(index).apply_sdg();}
   void apply_t(uint_t index){ get_qubit(index).apply_t();}
   void apply_tdg(uint_t index){ get_qubit(index).apply_tdg();}
-  void apply_u1(uint_t index, double lambda);
+  void apply_u1(uint_t index, double lambda)
+    { get_qubit(index).apply_u1(lambda);}
   void apply_u2(uint_t index, double phi, double lambda);
   void apply_u3(uint_t index, double theta, double phi, double lambda);
   void apply_cnot(uint_t index_A, uint_t index_B);
   void apply_swap(uint_t index_A, uint_t index_B, bool swap_gate);
 
+  void apply_cy(uint_t index_A, uint_t index_B);
   void apply_cz(uint_t index_A, uint_t index_B);
+  void apply_csx(uint_t index_A, uint_t index_B);
   void apply_cu1(uint_t index_A, uint_t index_B, double lambda);
   void apply_rxx(uint_t index_A, uint_t index_B, double theta);
   void apply_ryy(uint_t index_A, uint_t index_B, double theta);
   void apply_rzz(uint_t index_A, uint_t index_B, double theta);
   void apply_rzx(uint_t index_A, uint_t index_B, double theta);
 
-  void apply_ccx(const reg_t &qubits);  
+  void apply_ccx(const reg_t &qubits);
+  void apply_cswap(const reg_t &qubits);
 
   void apply_matrix(const reg_t & qubits, const cmatrix_t &mat, 
 		    bool is_diagonal=false);
@@ -184,9 +189,9 @@ public:
   //----------------------------------------------------------------
   virtual std::ostream&  print(std::ostream& out) const;
 
-  void full_state_vector(cvector_t &state_vector);
+  Vector<complex_t> full_statevector();
 
-  cvector_t get_amplitude_vector(const reg_t &base_values);
+  Vector<complex_t> get_amplitude_vector(const reg_t &base_values);
   complex_t get_single_amplitude(const std::string &base_value);
 
   void get_probabilities_vector(rvector_t& probvector, const reg_t &qubits) const;
@@ -278,6 +283,9 @@ public:
   reg_t get_bond_dimensions() const;
   uint_t get_max_bond_dimensions() const;
 
+  mps_container_t copy_to_mps_container();
+  mps_container_t move_to_mps_container();
+  
 private:
 
   MPS_Tensor& get_qubit(uint_t index) {
@@ -310,6 +318,11 @@ private:
 			  const cmatrix_t &mat, bool is_diagonal=false);
   void apply_matrix_internal(const reg_t & qubits, const cmatrix_t &mat,
 			     bool is_diagonal=false);
+
+  // Certain local operations need to be propagated to the neighboring qubits. 
+  // Such operations include apply_measure and apply_kraus
+  void propagate_to_neighbors_internal(uint_t min_qubit, uint_t max_qubit);
+
   // apply_matrix for more than 2 qubits
   void apply_multi_qubit_gate(const reg_t &qubits,
 			      const cmatrix_t &mat,
@@ -356,7 +369,8 @@ private:
   // This function computes the state vector for all the consecutive qubits 
   // between first_index and last_index
   MPS_Tensor state_vec_as_MPS(uint_t first_index, uint_t last_index) const;
-  void full_state_vector_internal(cvector_t &state_vector, const reg_t &qubits) ;
+
+  Vector<complex_t> full_state_vector_internal(const reg_t &qubits) ;
 
   void get_probabilities_vector_internal(rvector_t& probvector, const reg_t &qubits) const;
 
